@@ -114,10 +114,13 @@ export class CalculationEngine {
   ): UtilizationMetrics {
     const { billableRecords, hrRecords } = this.separatePayrollByType(payrollData.records);
     
+    // Use the NEW per-employee calculation method
+    const { totalNonBillableHours } = this.calculateNonBillableHoursByEmployee(billingData, payrollData);
+    
     const billableHours = billingData.totalBillableHours;
     const totalPayrollHours = sumBy(billableRecords, 'Hours'); // EXCLUDING HR
     const hrHours = sumBy(hrRecords, 'Hours');
-    const nonBillableHours = totalPayrollHours - billableHours;
+    const nonBillableHours = totalNonBillableHours; // Use per-employee calculation
     
     const utilizationRate = totalPayrollHours > 0 ? (billableHours / totalPayrollHours) * 100 : 0;
     const performanceVsBenchmark = utilizationRate - UTILIZATION_BENCHMARK;
