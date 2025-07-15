@@ -8,7 +8,7 @@ import { PayrollRecord, ProcessedPayrollData } from '../types/payroll.types';
 import { EmployeeMetric, OpportunityMetric } from '../types/employee.types';
 import { FinancialMetrics, UtilizationMetrics } from '../types/dashboard.types';
 import { isHRStaff, applyExactMapping } from '../constants/employeeMapping';
-import { EXPECTED_RESULTS, UTILIZATION_BENCHMARK, PERFORMANCE_THRESHOLDS } from '../constants/businessRules';
+import { EXPECTED_RESULTS, UTILIZATION_BENCHMARK, PERFORMANCE_THRESHOLDS, EMPLOYEE_NAME_MAPPING } from '../constants/businessRules';
 import { parseFlexibleDate } from '../constants/dateRanges';
 import { sumBy } from 'lodash';
 
@@ -63,27 +63,25 @@ export class CalculationEngine {
     // Revenue per hour
     const revenuePerBillableHour = billableHours > 0 ? totalRevenue / billableHours : 0;
     
-    // STEP 1: Calculate Total Billable Hours (from billing data)
-    const totalBillableHours = this.calculateTotalBillableHours(billingData);
+    // NEW PER-EMPLOYEE CALCULATION (CORRECT METHOD)
+    const { totalNonBillableHours } = this.calculateNonBillableHoursByEmployee(billingData, payrollData);
     
-    // STEP 2: Calculate Total Payroll Hours (from payroll data, excluding HR)
+    // Calculate aggregate totals for utilization rate
+    const totalBillableHours = this.calculateTotalBillableHours(billingData);
     const totalPayrollHours = this.calculateTotalPayrollHours(payrollData);
     
-    // STEP 3: Calculate Non-Billable Hours
-    const nonBillableHours = Math.max(0, totalPayrollHours - totalBillableHours);
-    
-    // STEP 4: Calculate Non-Billable Cost
+    // Calculate Non-Billable Cost using per-employee non-billable hours
     const billableStaffPayrollCost = this.calculateTotalPayrollCost(payrollData);
     const averageHourlyRate = totalPayrollHours > 0 ? billableStaffPayrollCost / totalPayrollHours : 0;
-    const nonBillableCost = nonBillableHours * averageHourlyRate;
+    const nonBillableCost = totalNonBillableHours * averageHourlyRate;
     
-    // STEP 5: Calculate Utilization Rate
+    // Calculate Utilization Rate
     const calculatedUtilizationRate = totalPayrollHours > 0 ? (totalBillableHours / totalPayrollHours) * 100 : 0;
     
-    console.log('🧮 CRITICAL: Non-Billable Hours Calculation Results:');
+    console.log('🧮 FINAL CALCULATION RESULTS (Per-Employee Method):');
     console.log('• Total Billable Hours:', totalBillableHours);
     console.log('• Total Payroll Hours (Billable Staff):', totalPayrollHours);
-    console.log('• Non-Billable Hours:', nonBillableHours);
+    console.log('• Non-Billable Hours (Per Employee Sum):', totalNonBillableHours.toFixed(2));
     console.log('• Average Hourly Rate: $', averageHourlyRate.toFixed(2));
     console.log('• Non-Billable Cost: $', nonBillableCost.toFixed(2));
     console.log('• Calculated Utilization Rate:', calculatedUtilizationRate.toFixed(1) + '%');
@@ -542,6 +540,116 @@ export class CalculationEngine {
     console.log('• Total Payroll Cost (Billable Staff): $', totalPayrollCostBillable.toFixed(2));
     
     return totalPayrollCostBillable;
+  }
+
+  /**
+   * CRITICAL: Calculate Non-Billable Hours Per Employee (CORRECT METHOD)
+   * For each employee: payroll hours - billable hours = non-billable hours
+   * Then sum all individual non-billable hours
+   */
+  private calculateNonBillableHoursByEmployee(
+    billingData: ProcessedBillingData, 
+    payrollData: ProcessedPayrollData
+  ): { totalNonBillableHours: number; employeeBreakdown: Array<{
+    payrollName: string;
+    billingName: string;
+    payrollHours: number;
+    billableHours: number;
+    nonBillableHours: number;
+  }> } {
+    console.log('\n🧮 CALCULATING NON-BILLABLE HOURS PER EMPLOYEE:');
+    
+    // STEP 1: Get Q2 payroll records (excluding HR)
+    const q2PayrollRecords = payrollData.records.filter(record => {
+      const checkDate = parseFlexibleDate(record['Check Date']);
+      if (!checkDate) return false;
+      
+      const isInQ2 = checkDate >= new Date('2025-04-18') && 
+                     checkDate <= new Date('2025-07-11');
+      const isNotHR = !isHRStaff(record.Name);
+      
+      return isInQ2 && isNotHR;
+    });
+
+    // STEP 2: Get Q2 billing records  
+    const q2BillingRecords = billingData.records.filter(record => {
+      const sessionDate = parseFlexibleDate(record['Session Date']);
+      if (!sessionDate) return false;
+      
+      return sessionDate >= new Date('2025-03-31') && 
+             sessionDate <= new Date('2025-06-27');
+    });
+
+    console.log('• Q2 Payroll Records (Billable Staff):', q2PayrollRecords.length);
+    console.log('• Q2 Billing Records:', q2BillingRecords.length);
+
+    // STEP 3: Group payroll by employee name
+    const payrollByEmployee = new Map<string, number>();
+    q2PayrollRecords.forEach(record => {
+      const name = record.Name;
+      const hours = record.Hours || 0;
+      payrollByEmployee.set(name, (payrollByEmployee.get(name) || 0) + hours);
+    });
+
+    // STEP 4: Group billing by employee name (using name mapping)
+    const billingByEmployee = new Map<string, number>();
+    q2BillingRecords.forEach(record => {
+      const techName = record['Tech Name'];
+      if (!techName) return;
+      
+      const hours = record.Hours || 0;
+      billingByEmployee.set(techName, (billingByEmployee.get(techName) || 0) + hours);
+    });
+
+    console.log('• Unique Payroll Employees:', payrollByEmployee.size);
+    console.log('• Unique Billing Employees:', billingByEmployee.size);
+
+    // STEP 5: Calculate non-billable hours per employee
+    const employeeBreakdown: Array<{
+      payrollName: string;
+      billingName: string;
+      payrollHours: number;
+      billableHours: number;
+      nonBillableHours: number;
+    }> = [];
+    let totalNonBillableHours = 0;
+
+    payrollByEmployee.forEach((payrollHours, payrollName) => {
+      // Map payroll name to billing name
+      const billingName = EMPLOYEE_NAME_MAPPING[payrollName] || payrollName;
+      
+      // Get billable hours for this employee
+      const billableHours = billingByEmployee.get(billingName) || 0;
+      
+      // Calculate non-billable hours for this employee
+      const nonBillableHours = Math.max(0, payrollHours - billableHours);
+      
+      totalNonBillableHours += nonBillableHours;
+      
+      employeeBreakdown.push({
+        payrollName,
+        billingName,
+        payrollHours,
+        billableHours,
+        nonBillableHours
+      });
+
+      // Log employees with significant non-billable hours
+      if (nonBillableHours > 10) {
+        console.log(`• ${payrollName}: ${payrollHours}h payroll - ${billableHours}h billable = ${nonBillableHours}h non-billable`);
+      }
+    });
+
+    // Sort by non-billable hours (highest first)
+    employeeBreakdown.sort((a, b) => b.nonBillableHours - a.nonBillableHours);
+
+    console.log(`\n📊 TOTAL NON-BILLABLE HOURS (Per Employee Method): ${totalNonBillableHours.toFixed(2)}`);
+    console.log(`📊 Top 5 employees with most non-billable hours:`);
+    employeeBreakdown.slice(0, 5).forEach((emp, i) => {
+      console.log(`   ${i+1}. ${emp.payrollName}: ${emp.nonBillableHours.toFixed(1)}h non-billable`);
+    });
+
+    return { totalNonBillableHours, employeeBreakdown };
   }
 }
 
