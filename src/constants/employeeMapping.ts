@@ -22,7 +22,11 @@ export interface FuzzyMatch {
  * Apply exact employee name mappings from business rules
  */
 export const applyExactMapping = (name: string): string => {
-  return EMPLOYEE_NAME_MAPPING[name] || name;
+  const mapped = EMPLOYEE_NAME_MAPPING[name] || name;
+  if (mapped !== name) {
+    console.log(`🔄 Employee name mapping: "${name}" → "${mapped}"`);
+  }
+  return mapped;
 };
 
 /**
@@ -234,17 +238,31 @@ export const validateEmployeeMatching = (
   const matchedBilling = new Set<string>();
   const matchedPayroll = new Set<string>();
   
-  billingNames.forEach(billingName => {
-    const mapped = applyExactMapping(billingName);
-    if (payrollNames.includes(mapped)) {
-      matchedBilling.add(billingName);
-      matchedPayroll.add(mapped);
+  // FIXED: Check each payroll name and see if it maps to a billing name
+  payrollNames.forEach(payrollName => {
+    const mappedToBilling = applyExactMapping(payrollName); // Map payroll → billing
+    if (billingNames.includes(mappedToBilling)) {
+      matchedPayroll.add(payrollName);
+      matchedBilling.add(mappedToBilling);
     } else {
       // Try fuzzy matching
-      const result = findEmployeeMatches(mapped, payrollNames, 85);
+      const result = findEmployeeMatches(payrollName, billingNames, 85);
       if (result.shouldAutoMatch && result.fuzzyMatches.length > 0) {
+        matchedPayroll.add(payrollName);
+        matchedBilling.add(result.fuzzyMatches[0].name);
+      }
+    }
+  });
+  
+  // Also check for billing names that don't have corresponding payroll names
+  billingNames.forEach(billingName => {
+    if (!matchedBilling.has(billingName)) {
+      // Check if any payroll name maps to this billing name
+      const hasPayrollMatch = payrollNames.some(payrollName => 
+        applyExactMapping(payrollName) === billingName
+      );
+      if (hasPayrollMatch) {
         matchedBilling.add(billingName);
-        matchedPayroll.add(result.fuzzyMatches[0].name);
       }
     }
   });

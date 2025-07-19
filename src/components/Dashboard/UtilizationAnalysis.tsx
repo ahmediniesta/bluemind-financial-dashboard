@@ -7,7 +7,6 @@ import { ProcessedPayrollData } from '../../types/payroll.types';
 import MetricCard from './MetricCard';
 import StatusIndicator from '../UI/StatusIndicator';
 import { formatHours, formatCurrency, formatPercentage } from '../../utils/formatters';
-import { UTILIZATION_BENCHMARK } from '../../constants/businessRules';
 
 interface UtilizationAnalysisProps {
   utilizationMetrics: UtilizationMetrics;
@@ -42,8 +41,8 @@ const UtilizationAnalysis: React.FC<UtilizationAnalysisProps> = ({
           value={utilizationMetrics.utilizationRate}
           format="percentage"
           subtitle="Billable vs Total Hours"
-          benchmark={UTILIZATION_BENCHMARK}
-          trend={utilizationMetrics.utilizationRate > UTILIZATION_BENCHMARK ? 'up' : 'down'}
+          benchmark={utilizationMetrics.benchmark}
+          trend={utilizationMetrics.utilizationRate > utilizationMetrics.benchmark ? 'up' : 'down'}
         />
 
         <MetricCard
@@ -147,7 +146,7 @@ const UtilizationAnalysis: React.FC<UtilizationAnalysisProps> = ({
         <div className="chart-container">
           <div className="chart-header">
             <h3 className="chart-title">Performance vs Benchmark</h3>
-            <p className="chart-subtitle">{formatPercentage(UTILIZATION_BENCHMARK)} Industry Standard</p>
+            <p className="chart-subtitle">{formatPercentage(utilizationMetrics.benchmark)} Benchmark</p>
           </div>
 
           <div className="space-y-6">
@@ -173,7 +172,7 @@ const UtilizationAnalysis: React.FC<UtilizationAnalysisProps> = ({
                       stroke="#f59e0b"
                       strokeWidth="10"
                       fill="none"
-                      strokeDasharray={`${(UTILIZATION_BENCHMARK / 100) * 314} 314`}
+                      strokeDasharray={`${(utilizationMetrics.benchmark / 100) * 314} 314`}
                       opacity="0.3"
                     />
                     {/* Actual utilization circle */}
@@ -181,7 +180,7 @@ const UtilizationAnalysis: React.FC<UtilizationAnalysisProps> = ({
                       cx="60"
                       cy="60"
                       r="50"
-                      stroke={utilizationMetrics.utilizationRate >= UTILIZATION_BENCHMARK ? "#22c55e" : "#ef4444"}
+                      stroke={utilizationMetrics.utilizationRate >= utilizationMetrics.benchmark ? "#22c55e" : "#ef4444"}
                       strokeWidth="10"
                       fill="none"
                       strokeDasharray={`${(utilizationMetrics.utilizationRate / 100) * 314} 314`}
@@ -285,7 +284,7 @@ const UtilizationAnalysis: React.FC<UtilizationAnalysisProps> = ({
             <div className="flex justify-between">
               <span className="text-gray-600">Potential improvement</span>
               <span className="font-semibold text-success-600">
-                {formatHours((UTILIZATION_BENCHMARK / 100) * utilizationMetrics.totalPayrollHours - utilizationMetrics.billableHours)}
+                {formatHours((utilizationMetrics.benchmark / 100) * utilizationMetrics.totalPayrollHours - utilizationMetrics.billableHours)}
               </span>
             </div>
           </div>

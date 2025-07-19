@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { BarChart3, TrendingUp, Users, AlertCircle, RefreshCw } from 'lucide-react';
+import { BarChart3, Users, AlertCircle, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 import { useFileReader } from '../../hooks/useFileReader';
 import { useDataProcessor } from '../../hooks/useDataProcessor';
 import FinancialOverview from './FinancialOverview';
-import UtilizationAnalysis from './UtilizationAnalysis';
 import EmployeeAnalysis from './EmployeeAnalysis';
 import LoadingSpinner from '../UI/LoadingSpinner';
 import ErrorBoundary from '../UI/ErrorBoundary';
 import { getDateRangeSummary } from '../../constants/dateRanges';
 
-type DashboardTab = 'overview' | 'utilization' | 'employees';
+type DashboardTab = 'overview' | 'employees';
 
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
@@ -24,8 +23,7 @@ export const Dashboard: React.FC = () => {
     employeeMetrics,
     topOpportunities,
     unmatchedEmployees,
-    dataQuality,
-    validationResults
+    dataQuality
   } = useDataProcessor(billingData, payrollData);
 
   const tabs = [
@@ -36,16 +34,10 @@ export const Dashboard: React.FC = () => {
       description: 'Revenue, costs, and profit analysis',
     },
     {
-      id: 'utilization' as const,
-      label: 'Utilization Analysis',
-      icon: TrendingUp,
-      description: 'Billable vs non-billable time analysis',
-    },
-    {
       id: 'employees' as const,
       label: 'Employee Analysis',
       icon: Users,
-      description: 'Individual performance and opportunities',
+      description: 'Individual performance and utilization insights',
     },
   ];
 
@@ -99,8 +91,6 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  // Data validation warnings
-  const hasValidationIssues = validationResults && !validationResults.isValid;
 
   return (
     <ErrorBoundary>
@@ -141,29 +131,6 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Validation warnings */}
-          {hasValidationIssues && (
-            <div className="mt-4 bg-warning-50 border border-warning-200 rounded-md p-4">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-warning-400 mt-0.5" />
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-warning-800">
-                    Validation Discrepancies Detected
-                  </h3>
-                  <div className="mt-2 text-sm text-warning-700">
-                    <ul className="list-disc list-inside space-y-1">
-                      {validationResults?.discrepancies.map((discrepancy, index) => (
-                        <li key={index}>
-                          {discrepancy.metric}: Expected {discrepancy.expected}, got {discrepancy.actual} 
-                          (difference: {discrepancy.difference.toFixed(2)})
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Tab Navigation */}
           <nav className="mt-6">
@@ -200,14 +167,7 @@ export const Dashboard: React.FC = () => {
               financialMetrics={financialMetrics}
               utilizationMetrics={utilizationMetrics}
               dataQuality={dataQuality}
-            />
-          )}
-          
-          {activeTab === 'utilization' && utilizationMetrics && (
-            <UtilizationAnalysis 
-              utilizationMetrics={utilizationMetrics}
-              employeeMetrics={employeeMetrics}
-              payrollData={payrollData}
+              topOpportunities={topOpportunities}
             />
           )}
           
@@ -217,6 +177,7 @@ export const Dashboard: React.FC = () => {
               topOpportunities={topOpportunities}
               unmatchedEmployees={unmatchedEmployees}
               dataQuality={dataQuality}
+              utilizationMetrics={utilizationMetrics}
             />
           )}
         </main>

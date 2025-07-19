@@ -28,7 +28,7 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({
       case 'quality':
         return getQualityConfig(status);
       default:
-        return getCustomConfig(status);
+        return getCustomConfig();
     }
   };
 
@@ -131,7 +131,7 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({
     }
   };
 
-  const getCustomConfig = (_status: string) => {
+  const getCustomConfig = () => {
     return {
       color: 'neutral',
       icon: AlertCircle,

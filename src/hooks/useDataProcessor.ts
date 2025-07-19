@@ -45,11 +45,11 @@ export const useDataProcessor = (
       // Calculate financial metrics
       const financialMetrics = calculationEngine.calculateFinancialMetrics(billingData, payrollData);
       
-      // Calculate utilization metrics
-      const utilizationMetrics = calculationEngine.calculateUtilizationMetrics(billingData, payrollData);
-      
       // Analyze employee performance
       const employeeMetrics = calculationEngine.analyzeEmployeePerformance(billingData, payrollData);
+      
+      // Calculate utilization metrics (now includes profit margin from employee metrics)
+      const utilizationMetrics = calculationEngine.calculateUtilizationMetrics(billingData, payrollData, employeeMetrics);
       
       // Identify improvement opportunities
       const topOpportunities = calculationEngine.identifyImprovementOpportunities(employeeMetrics);

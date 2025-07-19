@@ -11,6 +11,7 @@ export interface FinancialMetrics {
   utilizationRate: number; // (billableHours / totalPayrollHours) * 100 (EXCLUDING HR)
   profitMargin: number; // ((revenue - totalPayrollCost) / revenue) * 100
   profitMarginVsBillableStaff: number; // ((revenue - billableStaffCost) / revenue) * 100
+  comprehensiveProfitMargin: number; // ((revenue - billableStaffCost - nonBillableCost) / revenue) * 100
   revenuePerBillableHour: number; // totalRevenue / totalBillableHours
   nonBillableCost: number; // nonBillableHours * (billableStaffCost / billableStaffHours)
   
@@ -21,6 +22,7 @@ export interface FinancialMetrics {
   hrCost: number;
   grossProfit: number;
   netProfit: number;
+  comprehensiveProfit: number; // revenue - billableStaffCost - nonBillableCost
   
   // Expected Q2 2025 results (validate against these)
   expectedRevenue: number; // 723471.65
@@ -30,14 +32,16 @@ export interface FinancialMetrics {
 }
 
 export interface UtilizationMetrics {
-  utilizationRate: number;
+  utilizationRate: number; // For Technicians only
   billableHours: number;
-  totalPayrollHours: number; // Excluding HR
+  totalPayrollHours: number; // Technicians only, excluding HR and BCBAs
   nonBillableHours: number;
   hrHours: number;
-  benchmark: number; // 90%
-  performanceVsBenchmark: number;
+  benchmark: number; // 90% utilization benchmark
+  performanceVsBenchmark: number; // vs utilization benchmark
   costOfNonBillableTime: number;
+  averageUtilizationRate: number; // Average utilization for Technicians
+  averageProfitMargin: number; // Average profit margin for BCBAs
 }
 
 export interface DashboardData {

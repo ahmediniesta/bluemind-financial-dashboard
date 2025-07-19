@@ -218,12 +218,12 @@ export class DataValidator {
         });
       }
 
-      if (typeof record['Total Expenses'] !== 'number' || record['Total Expenses'] < 0) {
+      if (typeof record['Total Expenses'] !== 'number') {
         errors.push({
           row: rowNumber,
           field: 'Total Expenses',
           value: String(record['Total Expenses']),
-          error: 'Total Expenses must be a positive number',
+          error: 'Total Expenses must be a number (can be negative for void entries)',
           severity: 'error',
         });
         isValid = false;

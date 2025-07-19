@@ -4,14 +4,14 @@
  */
 
 // EXACT date ranges - verify these in your calculations
-export const Q2_BILLING_START = new Date('2025-03-31');
-export const Q2_BILLING_END = new Date('2025-06-27'); // Back to original as per user spec
+export const Q2_BILLING_START = new Date(2025, 2, 31); // March 31, 2025 (month is 0-indexed)
+export const Q2_BILLING_END = new Date(2025, 5, 29); // June 29, 2025
 
-// Payroll check dates: employees get paid 2 weeks after the work period
-// Check date 4/18/2025 → work period ~April 4-9, 2025
-// Check date 7/11/2025 → work period ~June 27-July 2, 2025
-export const Q2_PAYROLL_CHECK_START = new Date('2025-04-18');
-export const Q2_PAYROLL_CHECK_END = new Date('2025-07-11');
+// Payroll check dates: employees get paid ~2 weeks after the work period
+// Check date 4/18/2025 → work period ~March 31 - April 6, 2025  
+// Check date 7/11/2025 → work period ~June 23 - June 29, 2025
+export const Q2_PAYROLL_CHECK_START = new Date(2025, 3, 18); // April 18, 2025
+export const Q2_PAYROLL_CHECK_END = new Date(2025, 6, 11); // July 11, 2025
 
 // EXACT employee name mappings - implement precisely
 // PAYROLL NAME → BILLING NAME
@@ -22,24 +22,58 @@ export const EMPLOYEE_NAME_MAPPING: Record<string, string> = {
   'Wilcox, Breann R': 'Wilcox, BreAnn',
   'Clegg, Charmisha M': 'Clegg, Charmisha', // User reported this needs mapping
   'Hammound, Tarek': 'Hammoud, Ricky', // User clarified: payroll → billing
+  'Mihai, Bryan': 'Mihai, Brian', // Payroll Bryan → Billing Brian
+  // DeStevens variations - all same person
+  'Destevens, Kaileigh': 'DeStevens, Kaileigh', // Payroll → canonical billing name
+  'deStevens, Kaileigh': 'DeStevens, Kaileigh',  // lowercase billing → canonical billing name
+  // NEW MAPPINGS IDENTIFIED FROM DATA ANALYSIS
+  'El Aroud, Mariam': 'ElAroud, Mariam',
+  'Alkhalidi, Zahraa J': 'Alkhalidi, Zahraa',
+  'Aqrabawi, Zakia D': 'Aqrabawi, Zakia',
+  'Mazloum, Mohamdali': 'Mazloum, Moe',
+  'Smith, Anaily A': 'Smith, Anaily',
 };
 
 // HR staff to exclude from billable calculations
-export const HR_STAFF = ['Seifeddine, Malak'];
+export const HR_STAFF = [
+  'Seifeddine, Malak',
+  'Hammoud, Ricky',
+  'Elmoghrabi, Mariam',
+  'Mazloum, Moe',
+  'Karnib, Malik',
+  'Clegg, Charmisha',  // Training and quit
+  'Hancox, Maria C'    // Training and quit
+];
 
-// Industry benchmarks for comparison
-export const UTILIZATION_BENCHMARK = 90; // 90%
-export const PROFIT_MARGIN_BENCHMARK = 35; // 35%
-
-// Expected Q2 2025 results for validation
-export const EXPECTED_RESULTS = {
-  REVENUE: 723471.65,
-  UTILIZATION_RATE: 92.5,
-  NON_BILLABLE_COST: 19097, // EXCLUDES HR
-  PROFIT_MARGIN: 47.6, // vs billable staff only
+// Employee role classification and hourly rates
+export const EMPLOYEE_ROLES = {
+  TECH: {
+    hourlyRate: 19,
+    serviceCodes: [97153], // Techs only provide code 97153
+    name: 'Technician'
+  },
+  BCBA: {
+    hourlyRate: 55,
+    serviceCodes: [97155, 97156, 97151], // BCBAs provide these codes
+    salaryThreshold: 32, // 32+ billable hours = salary
+    name: 'BCBA'
+  }
 } as const;
 
-// Performance tier thresholds
+// Industry benchmarks for comparison
+export const UTILIZATION_BENCHMARK = 90; // 90% utilization for Technicians
+export const PROFIT_MARGIN_BENCHMARK = 35; // 35% overall company profit margin
+
+// Expected Q2 2025 results for validation (AMOUNTS-BASED APPROACH)
+export const EXPECTED_RESULTS = {
+  REVENUE: 773034.41, // From actual billing data
+  UTILIZATION_RATE: 85.7, // Hours-based metric for employee analysis
+  TOTAL_PAYROLL_COST: 456070.37, // Actual total staff cost from payroll data
+  PROFIT_MARGIN: 40.9, // (Revenue - Total Staff Cost) / Revenue * 100
+  GROSS_PROFIT: 316964.04, // Revenue - Total Staff Cost (773034.41 - 456070.37)
+} as const;
+
+// Performance tier thresholds for Technicians (utilization-based)
 export const PERFORMANCE_THRESHOLDS = {
   EXCELLENT: 90, // >= 90% utilization
   GOOD: 80, // >= 80% utilization

@@ -14,10 +14,12 @@ export interface EmployeeMetric {
   revenue: number;
   payrollCost: number;
   revenuePerHour: number;
+  profitMargin: number; // (revenue - cost) / revenue * 100 - for BCBAs
   isMatched: boolean;
   performanceTier: 'excellent' | 'good' | 'needs-improvement' | 'critical';
   potentialRevenue: number;
   isHRStaff: boolean;
+  role: 'TECH' | 'BCBA'; // NEW: Role classification based on service codes
   department?: string;
 }
 

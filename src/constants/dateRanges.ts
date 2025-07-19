@@ -18,7 +18,7 @@ export const Q2_DATE_RANGES = {
     start: Q2_BILLING_START,
     end: Q2_BILLING_END,
     label: 'Q2 Billing Period',
-    description: 'March 31, 2025 - June 27, 2025',
+    description: 'March 31, 2025 - June 29, 2025',
   },
   PAYROLL: {
     start: Q2_PAYROLL_CHECK_START,
@@ -30,7 +30,7 @@ export const Q2_DATE_RANGES = {
 
 /**
  * Check if a billing session date falls within Q2 2025 range
- * March 31, 2025 - June 27, 2025
+ * March 30, 2025 - June 29, 2025
  */
 export const isValidBillingDate = (sessionDate: string | Date): boolean => {
   try {

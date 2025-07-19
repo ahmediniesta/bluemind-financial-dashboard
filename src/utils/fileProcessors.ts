@@ -6,8 +6,9 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { BillingRecord } from '../types/billing.types';
-import { PayrollRecord } from '../types/payroll.types';
+import { PayrollRecord, ProcessedPayrollData } from '../types/payroll.types';
 import { parseFlexibleDate, isValidBillingDate, isValidPayrollDate } from '../constants/dateRanges';
+import { Q2_PAYROLL_CHECK_START, Q2_PAYROLL_CHECK_END } from '../constants/businessRules';
 
 interface PayrollRawRecord {
   'Pay Frequency': string;
@@ -24,13 +25,6 @@ interface PayrollRawRecord {
   'Total Expenses': string | number;
 }
 
-interface PayrollProcessingResult {
-  records: PayrollRecord[];
-  totalCost: number;
-  totalHours: number;
-  uniqueEmployees: number;
-  errors: string[];
-}
 
 interface BillingProcessingResult {
   records: BillingRecord[];
@@ -74,13 +68,6 @@ export class FileProcessor {
                      totalRevenue += billingRecord.Price || 0;
                      totalBillableHours += billingRecord.Hours || 0;
                      uniqueEmployees.add(billingRecord['Tech Name']);
-                  } else if (sessionDate) {
-                    // Log dates outside range for debugging
-                    const dateStr = sessionDate.toLocaleDateString();
-                    if (index < 10) { // Only log first 10 to avoid spam
-                      // eslint-disable-next-line no-console
-                      console.log(`Billing record ${index + 2} outside date range: ${dateStr} (${billingRecord['Session Date']})`);
-                    }
                   }
                 }
               } catch (error) {
@@ -88,11 +75,7 @@ export class FileProcessor {
               }
             });
 
-            console.log('✅ Billing Data Summary:');
-            console.log('• Total records processed:', validRecords.length);
-            console.log('• Total revenue:', totalRevenue);
-            console.log('• Total billable hours:', totalBillableHours);
-            console.log('• Unique employees:', uniqueEmployees.size);
+            // Summary logging removed for production
 
             resolve({
               records: validRecords,
@@ -115,10 +98,8 @@ export class FileProcessor {
   /**
    * Process Excel payroll data with exact specifications
    */
-  async processPayrollExcel(filePath: string): Promise<PayrollProcessingResult> {
+  async processPayrollExcel(filePath: string): Promise<ProcessedPayrollData> {
     try {
-      console.log('📊 Starting Excel payroll processing...');
-      
       // Step 1: Load Excel file
       const excelBuffer = await this.loadExcelFile(filePath);
       
@@ -132,14 +113,9 @@ export class FileProcessor {
          raw: false // Important: Don't use raw mode to get formatted values
        });
 
-      console.log('📋 Available sheets:', workbook.SheetNames);
-      
       // Step 3: Get the payroll sheet
       const sheetName = workbook.SheetNames[0]; // Should be "Payroll Summary"
       const worksheet = workbook.Sheets[sheetName];
-      
-      // Debug the sheet structure
-      this.debugExcelReading(worksheet);
       
       // Step 4: CRITICAL - Use headers from row 7, data from row 8+
       const jsonData = XLSX.utils.sheet_to_json(worksheet, {
@@ -148,8 +124,7 @@ export class FileProcessor {
         blankrows: false // Skip blank rows
       }) as PayrollRawRecord[];
 
-      console.log('📊 Raw data sample:', jsonData.slice(0, 3));
-      console.log('📊 Total raw records:', jsonData.length);
+      // Data processing continues
 
       // Step 5: Clean and validate the data
       const cleanedData: PayrollRecord[] = jsonData
@@ -170,14 +145,14 @@ export class FileProcessor {
               'Department': String(row['Department'] || '').trim(),
               'Check Date': cleanCheckDate,
               'Name': String(row['Name'] || '').trim(),
-              'Hours': this.parseNumber(row['Hours']),
-              'Total Paid': this.parseNumber(row['Total Paid']),
-              'Tax Withheld': this.parseNumber(row['Tax Withheld']),
-              'Deductions': this.parseNumber(row['Deductions']),
-              'Net Pay': this.parseNumber(row['Net Pay']),
+              'Hours': this.parseAccountingNumber(row['Hours']),
+              'Total Paid': this.parseAccountingNumber(row['Total Paid']),
+              'Tax Withheld': this.parseAccountingNumber(row['Tax Withheld']),
+              'Deductions': this.parseAccountingNumber(row['Deductions']),
+              'Net Pay': this.parseAccountingNumber(row['Net Pay']),
               'Payment Details/Check No': String(row['Payment Details/Check No'] || '').trim(),
-              'Employer Liability': this.parseNumber(row['Employer Liability']),
-              'Total Expenses': this.parseNumber(row['Total Expenses'])
+              'Employer Liability': this.parseAccountingNumber(row['Employer Liability']),
+              'Total Expenses': this.parseAccountingNumber(row['Total Expenses'])
             };
           } catch (error) {
             console.error('❌ Error parsing row:', row, error);
@@ -185,8 +160,7 @@ export class FileProcessor {
           }
         });
 
-      console.log('✅ Cleaned payroll data:', cleanedData.length, 'records');
-      console.log('👤 Sample employee:', cleanedData[0]);
+      // Data cleaning completed
 
       // Step 6: Filter by Q2 date range and calculate totals
       const validRecords: PayrollRecord[] = [];
@@ -201,36 +175,32 @@ export class FileProcessor {
           const checkDate = parseFlexibleDate(payrollRecord['Check Date']);
           if (checkDate && isValidPayrollDate(checkDate)) {
             validRecords.push(payrollRecord);
-            totalPayrollCost += payrollRecord['Total Expenses'] || 0;
+            totalPayrollCost += this.parseAccountingNumber(payrollRecord['Total Expenses']);
             totalPayrollHours += payrollRecord.Hours || 0;
             uniqueEmployees.add(payrollRecord.Name);
-          } else if (checkDate) {
-            // Log dates outside range for debugging
-            const dateStr = checkDate.toLocaleDateString();
-            if (index < 10) { // Only log first 10 to avoid spam
-              console.log(`Payroll record outside date range: ${dateStr} (${payrollRecord['Check Date']})`);
-            }
           }
         } catch (error) {
           errors.push(`Payroll record ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       });
 
-      // Step 7: Validate expected results
-      this.validateExpectedResults(validRecords);
-
-      console.log('📈 Final Payroll Summary:');
-      console.log('• Q2 Records (4/18-7/11):', validRecords.length);
-      console.log('• Total Q2 Cost: $', totalPayrollCost.toLocaleString());
-      console.log('• Total Q2 Hours:', totalPayrollHours.toLocaleString());
-      console.log('• Q2 Unique Employees:', uniqueEmployees.size);
+      // Payroll processing completed
 
       return {
         records: validRecords,
-        totalCost: totalPayrollCost,
-        totalHours: totalPayrollHours,
-        uniqueEmployees: uniqueEmployees.size,
-        errors
+        totalRecords: validRecords.length,
+        totalPayrollCost: totalPayrollCost,
+        totalPayrollHours: totalPayrollHours,
+        billableStaffCost: 0, // Will be calculated in calculationEngine
+        billableStaffHours: 0, // Will be calculated in calculationEngine
+        hrCost: 0, // Will be calculated in calculationEngine
+        hrHours: 0, // Will be calculated in calculationEngine
+        dateRange: {
+          start: Q2_PAYROLL_CHECK_START,
+          end: Q2_PAYROLL_CHECK_END
+        },
+        uniqueEmployees: Array.from(uniqueEmployees),
+        errors: []
       };
 
     } catch (error) {
@@ -246,17 +216,13 @@ export class FileProcessor {
     try {
       // Ensure proper URL format for Vercel deployment
       const fullUrl = filePath.startsWith('http') ? filePath : `${window.location.origin}${filePath}`;
-      console.log('🔗 Fetching CSV from:', fullUrl);
-      
       const response = await fetch(fullUrl);
-      console.log('📊 CSV response status:', response.status, response.statusText);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
       }
       
       const text = await response.text();
-      console.log('📝 CSV content length:', text.length, 'characters');
       
       if (text.length === 0) {
         throw new Error('CSV file is empty');
@@ -276,18 +242,13 @@ export class FileProcessor {
     try {
       // Ensure proper URL format for Vercel deployment
       const fullUrl = filePath.startsWith('http') ? filePath : `${window.location.origin}${filePath}`;
-      console.log('🔗 Fetching Excel from:', fullUrl);
-      
       const response = await fetch(fullUrl);
-      console.log('📊 Excel response status:', response.status, response.statusText);
-      console.log('📊 Excel response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
       }
       
       const contentType = response.headers.get('content-type');
-      console.log('📊 Excel content-type:', contentType);
       
       if (contentType && contentType.includes('text/html')) {
         const htmlContent = await response.text();
@@ -296,7 +257,6 @@ export class FileProcessor {
       }
       
       const arrayBuffer = await response.arrayBuffer();
-      console.log('📝 Excel file size:', arrayBuffer.byteLength, 'bytes');
       
       if (arrayBuffer.byteLength === 0) {
         throw new Error('Excel file is empty');
@@ -390,67 +350,34 @@ export class FileProcessor {
   }
 
   /**
-   * Debug Excel sheet structure
+   * Parse accounting number format (handles parentheses as negative values)
    */
-  private debugExcelReading(worksheet: XLSX.WorkSheet): void {
-    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
-    console.log('📊 Sheet range:', worksheet['!ref']);
+  private parseAccountingNumber(value: any): number {
+    if (!value || value === '') return 0;
     
-    // Show first 10 rows raw
-    console.log('📋 First 10 rows:');
-    for (let row = 0; row <= Math.min(10, range.e.r); row++) {
-      const rowData: any[] = [];
-      for (let col = range.s.c; col <= range.e.c; col++) {
-        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
-        const cell = worksheet[cellRef];
-        rowData.push(cell ? cell.v : '');
-      }
-      console.log(`Row ${row}:`, rowData.filter(cell => cell !== '').join(' | '));
+    const str = String(value).trim();
+    
+    // Handle parentheses as negative values (standard accounting format)
+    if (str.startsWith('(') && str.endsWith(')')) {
+      const numberStr = str.slice(1, -1).replace(/,/g, '');
+      const result = -parseFloat(numberStr) || 0;
+      return result;
     }
     
-    // Show headers specifically (row 6)
-    console.log('📋 Headers (Row 6):');
-    const headerRow: any[] = [];
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cellRef = XLSX.utils.encode_cell({ r: 6, c: col });
-      const cell = worksheet[cellRef];
-      headerRow.push(cell ? cell.v : '');
+    // Handle negative signs
+    if (str.startsWith('-')) {
+      const numberStr = str.slice(1).replace(/,/g, '');
+      const result = -parseFloat(numberStr) || 0;
+      return result;
     }
-    console.log('Headers:', headerRow);
+    
+    // Handle positive numbers
+    const numberStr = str.replace(/,/g, '');
+    const result = parseFloat(numberStr) || 0;
+    return result;
   }
 
-  /**
-   * Validate against expected Q2 2025 results
-   */
-  private validateExpectedResults(data: PayrollRecord[]): void {
-    const totalExpenses = data.reduce((sum, r) => sum + (r['Total Expenses'] || 0), 0);
-    const totalHours = data.reduce((sum, r) => sum + (r.Hours || 0), 0);
-    const uniqueEmployees = new Set(data.map(r => r.Name)).size;
-    
-    console.log('🔍 Validation Results:');
-    console.log('• Total Expenses:', totalExpenses.toLocaleString(), '(expected: ~417,646)');
-    console.log('• Total Hours:', totalHours.toLocaleString(), '(expected: ~12,167)');
-    console.log('• Unique Employees:', uniqueEmployees, '(expected: ~47)');
-    
-    // Find Malak's data
-    const malakData = data.filter(r => r.Name === 'Seifeddine, Malak');
-    const malakHours = malakData.reduce((sum, r) => sum + (r.Hours || 0), 0);
-    const malakCost = malakData.reduce((sum, r) => sum + (r['Total Expenses'] || 0), 0);
-    
-    console.log('• Malak Hours:', malakHours.toLocaleString(), '(expected: ~472)');
-    console.log('• Malak Cost: $', malakCost.toLocaleString(), '(expected: ~18,147)');
 
-    // Warnings for unexpected values
-    if (totalExpenses < 200000) {
-      console.warn('⚠️ Warning: Total expenses seems low:', totalExpenses);
-    }
-    if (totalHours < 5000) {
-      console.warn('⚠️ Warning: Total hours seems low:', totalHours);
-    }
-    if (uniqueEmployees < 30) {
-      console.warn('⚠️ Warning: Employee count seems low:', uniqueEmployees);
-    }
-  }
 }
 
 // Export singleton instance
